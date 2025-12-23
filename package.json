@@ -1,0 +1,33 @@
+{
+  "name": "test-backend",
+  "version": "1.0.0",
+  "description": "E-commerce backend with PostgreSQL Master-Replica replication",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "docker-compose up",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "test": "npm run test --workspaces",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "migrate": "cd backend && npm run migrate",
+    "migrate:deploy": "cd backend && npm run migrate:deploy",
+    "migrate:reset": "cd backend && npm run migrate:reset",
+    "prisma:studio": "cd backend && npm run prisma:studio",
+    "prisma:generate": "cd backend && npm run prisma:generate"
+  },
+  "keywords": [
+    "postgresql",
+    "replication",
+    "e-commerce",
+    "microservices"
+  ],
+  "author": "Demon5611",
+  "license": "MIT"
+}

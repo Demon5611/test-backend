@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  postgres-master:
+    image: postgres:15-alpine
+    container_name: postgres-master
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orders
+    ports:
+      - "5432:5432"
+    volumes:
+      - master-data:/var/lib/postgresql/data
+      - ./docker/postgres/master/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./docker/postgres/master/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    command: 
+      - "postgres"
+      - "-c" "config_file=/etc/postgresql/postgresql.conf"
+      - "-c" "hba_file=/etc/postgresql/pg_hba.conf"
+    networks:
+      pgnet:
+        ipv4_address: 172.18.0.2
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:15-alpine
+    container_name: postgres-replica
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orders
+    ports:
+      - "5433:5432"
+    volumes:
+      - replica-data:/var/lib/postgresql/data
+      - ./docker/postgres/replica/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./docker/postgres/replica/pg_hba.conf:/etc/postgresql/pg_hba.conf
+    command:
+      - "postgres"
+      - "-c" "config_file=/etc/postgresql/postgresql.conf"
+      - "-c" "hba_file=/etc/postgresql/pg_hba.conf"
+    networks:
+      pgnet:
+        ipv4_address: 172.18.0.3
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - pgnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - pgnet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  master-data:
+  replica-data:
+  redis-data:
+  minio-data:
+
+networks:
+  pgnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
