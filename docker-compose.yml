@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: orders
     ports:
-      - "5434:5432"  # Изменить на 5434 вместо 5432
+      - "5434:5432"
     volumes:
       - master-data:/var/lib/postgresql/data
       - ./docker/postgres/master/postgresql.conf:/etc/postgresql/postgresql.conf
@@ -34,12 +34,14 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: orders
+      POSTGRES_MASTER_SERVICE_HOST: postgres-master
     ports:
-      - "5435:5432"  # Изменить на 5435 вместо 5433
+      - "5435:5432"
     volumes:
       - replica-data:/var/lib/postgresql/data
       - ./docker/postgres/replica/postgresql.conf:/etc/postgresql/postgresql.conf
       - ./docker/postgres/replica/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
     command:
       - "postgres"
       - "-c"
@@ -58,46 +60,9 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - pgnet
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  minio:
-    image: minio/minio:latest
-    container_name: minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
-    networks:
-      - pgnet
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
 volumes:
   master-data:
   replica-data:
-  redis-data:
-  minio-data:
 
 networks:
   pgnet:
