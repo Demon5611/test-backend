@@ -51,4 +51,5 @@ model Order {
   @@index([productId])
   @@index([status])
   @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)])
 }
