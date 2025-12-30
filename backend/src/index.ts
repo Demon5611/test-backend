@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
 import ordersRoutes from './routes/orders.js';
 
+
 const app = Fastify({ 
   logger: {
     level: env.NODE_ENV === 'development' ? 'info' : 'warn',
@@ -18,10 +19,13 @@ await app.register(cors, {
 
 await app.register(helmet);
 
-await app.register(rateLimit, {
-  max: 1000,
-  timeWindow: '1 minute',
-});
+// Rate limiting: отключить для нагрузочного тестирования или увеличить лимит
+if (env.NODE_ENV !== 'test') {
+  await app.register(rateLimit, {
+    max: env.NODE_ENV === 'development' ? 100000 : 1000, // Большой лимит для dev/load testing
+    timeWindow: '1 minute',
+  });
+}
 
 // Health check
 app.get('/health', async () => {
