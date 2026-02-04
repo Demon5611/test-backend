@@ -1,25 +1,26 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Rate } from 'k6/metrics';
 
 const errorRate = new Rate('errors');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },
-    { duration: '1m', target: 100 },
-    { duration: '30s', target: 0 },
+    { duration: '30s', target: 100 },   // Разогрев: 100 VU
+    { duration: '1m', target: 500 },     // Увеличение: 500 VU
+    { duration: '2m', target: 1000 },   // Основная нагрузка: 1000 VU
+    { duration: '1m', target: 2000 },   // Пиковая нагрузка: 2000 VU
+    { duration: '30s', target: 0 },     // Снижение
   ],
   thresholds: {
-    http_req_duration: ['p(95)<150'],
-    http_req_failed: ['rate<0.01'],
-    errors: ['rate<0.01'],
+    http_req_duration: ['p(95)<300'],   // Увеличить порог для высокой нагрузки
+    http_req_failed: ['rate<0.05'],     // Допустить до 5% ошибок при высокой нагрузке
+    errors: ['rate<0.05'],
   },
 };
 
 const BASE_URL = __ENV.API_URL || 'http://localhost:3001';
 
-// UUID пользователей из БД (получены из таблицы users)
 const USER_IDS = [
   'f1afca3f-0ff7-4067-a311-0db7bbb8b4d3',
   '0a5efa57-0183-4b83-9b75-23adbc7b1331',
@@ -33,8 +34,6 @@ const USER_IDS = [
   '70f8f774-c1c2-4b13-bc57-30b696e1516f',
 ];
 
-// UUID продуктов из БД (получены из таблицы products)
-// Примечание: product-1 и product-2 пропущены, так как это не валидные UUID
 const PRODUCT_IDS = [
   'c6b4d43b-8207-42b2-ae1c-e16e5e16300c',
   '7f3072dc-4ff1-47d1-8fbb-2c8d644d3129',
@@ -46,10 +45,9 @@ const PRODUCT_IDS = [
   '3c1cc4e4-271d-4562-99b2-e18a09e12b91',
 ];
 
-// Функция для получения случайного UUID из массива
 function getRandomId(ids) {
   if (!ids || ids.length === 0) {
-    return null; // Вернуть null если массив пустой
+    return null;
   }
   return ids[Math.floor(Math.random() * ids.length)];
 }
@@ -59,16 +57,12 @@ export default function () {
   if (Math.random() < 0.8) {
     const response = http.get(`${BASE_URL}/api/orders`, {
       tags: { name: 'GetOrders' },
+      timeout: '30s',
     });
-    
-    // Вывод ошибок для диагностики
-    if (response.status !== 200) {
-      console.log(`GET Error: ${response.status} - ${response.body}`);
-    }
     
     const result = check(response, {
       'status is 200': (r) => r.status === 200,
-      'response time < 150ms': (r) => r.timings.duration < 150,
+      'response time < 300ms': (r) => r.timings.duration < 300,
     });
     
     errorRate.add(!result);
@@ -78,10 +72,8 @@ export default function () {
     const randomUserId = getRandomId(USER_IDS);
     const randomProductId = getRandomId(PRODUCT_IDS);
     
-    // Проверка: если UUID не загружены, пропустить POST запрос
     if (!randomUserId || !randomProductId) {
-      console.log('WARNING: USER_IDS or PRODUCT_IDS arrays are empty. Skipping POST request.');
-      return; // Пропустить этот запрос
+      return;
     }
     
     const payload = JSON.stringify({
@@ -93,21 +85,14 @@ export default function () {
     const response = http.post(`${BASE_URL}/api/orders`, payload, {
       headers: { 'Content-Type': 'application/json' },
       tags: { name: 'CreateOrder' },
+      timeout: '30s',
     });
-    
-    // Вывод ошибок для диагностики
-    if (response.status !== 201) {
-      console.log(`POST Error: ${response.status} - ${response.body}`);
-      console.log(`Payload: ${payload}`);
-    }
     
     const result = check(response, {
       'status is 201': (r) => r.status === 201,
-      'response time < 200ms': (r) => r.timings.duration < 200,
+      'response time < 500ms': (r) => r.timings.duration < 500,
     });
     
     errorRate.add(!result);
   }
-  
-  sleep(0.1);
 }

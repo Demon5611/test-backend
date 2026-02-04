@@ -1,25 +1,25 @@
 import { readPrisma, writePrisma } from '../config/database.js';
+import { redis } from '../config/redis.js';
 
-/**
- * OrderService - сервис для работы с заказами
- * 
- * Использует разделение чтения/записи:
- * - readPrisma -> Replica (порт 5435) для чтения (80% запросов)
- * - writePrisma -> Master (порт 5434) для записи (20% запросов)
- */
+const CACHE_TTL = 30;
+
 export class OrderService {
-  /**
-   * Получить список заказов
-   * Чтение выполняется на Replica для разгрузки Master
-   * 
-   * @param userId - опциональный фильтр по ID пользователя
-   * @returns массив заказов с минимальными данными пользователя и продукта
-   */
   async getOrders(userId?: string) {
-    return await readPrisma.order.findMany({
+    const cacheKey = userId ? `orders:user:${userId}` : 'orders:all';
+    
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (error) {
+        console.error('Redis cache read error:', error);
+      }
+    }
+    
+    const orders = await readPrisma.order.findMany({
       where: userId ? { userId } : undefined,
-      // Используем select вместо include для уменьшения размера ответа
-      // Это улучшает производительность и уменьшает нагрузку на сеть
       select: {
         id: true,
         userId: true,
@@ -27,7 +27,6 @@ export class OrderService {
         status: true,
         createdAt: true,
         updatedAt: true,
-        // Минимальные данные пользователя (только необходимые поля)
         user: {
           select: {
             id: true,
@@ -35,7 +34,6 @@ export class OrderService {
             name: true,
           },
         },
-        // Минимальные данные продукта (только необходимые поля)
         product: {
           select: {
             id: true,
@@ -44,67 +42,104 @@ export class OrderService {
           },
         },
       },
-      take: 50, // Ограничение количества записей для производительности
+      take: 50,
       orderBy: {
-        createdAt: 'desc', // Сортировка по дате создания (новые сначала)
+        createdAt: 'desc',
       },
     });
+    
+    if (redis) {
+      try {
+        await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(orders));
+      } catch (error) {
+        console.error('Redis cache write error:', error);
+      }
+    }
+    
+    return orders;
   }
 
-  /**
-   * Получить заказ по ID
-   * Чтение выполняется на Replica
-   * 
-   * @param id - UUID заказа
-   * @returns заказ с полными данными пользователя и продукта
-   */
   async getOrderById(id: string) {
-    return await readPrisma.order.findUnique({
+    const cacheKey = `order:${id}`;
+    
+    if (redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch (error) {
+        console.error('Redis cache read error:', error);
+      }
+    }
+    
+    const order = await readPrisma.order.findUnique({
       where: { id },
-      // Для одного заказа используем include для получения всех данных
       include: {
         user: true,
         product: true,
       },
     });
+    
+    if (order && redis) {
+      try {
+        await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(order));
+      } catch (error) {
+        console.error('Redis cache write error:', error);
+      }
+    }
+    
+    return order;
   }
 
-  /**
-   * Создать новый заказ
-   * Запись выполняется на Master, затем автоматически реплицируется на Replica
-   * 
-   * @param data - данные заказа (userId, productId, status)
-   * @returns созданный заказ с данными пользователя и продукта
-   */
   async createOrder(data: {
     userId: string;
     productId: string;
     status?: string;
   }) {
-    return await writePrisma.order.create({
+    const order = await writePrisma.order.create({
       data: {
         userId: data.userId,
         productId: data.productId,
         status: data.status || 'pending',
       },
-      // Возвращаем полные данные для подтверждения создания
-      include: {
-        user: true,
-        product: true,
+      select: {
+        id: true,
+        userId: true,
+        productId: true,
+        status: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            price: true,
+          },
+        },
       },
     });
+    
+    if (redis) {
+      try {
+        await redis.del('orders:all');
+        await redis.del(`orders:user:${data.userId}`);
+      } catch (error) {
+        console.error('Redis cache invalidation error:', error);
+      }
+    }
+    
+    return order;
   }
 
-  /**
-   * Обновить статус заказа
-   * Запись выполняется на Master
-   * 
-   * @param id - UUID заказа
-   * @param status - новый статус заказа
-   * @returns обновленный заказ с данными пользователя и продукта
-   */
   async updateOrderStatus(id: string, status: string) {
-    return await writePrisma.order.update({
+    const order = await writePrisma.order.update({
       where: { id },
       data: { status },
       include: {
@@ -112,5 +147,19 @@ export class OrderService {
         product: true,
       },
     });
+    
+    if (redis) {
+      try {
+        await redis.del(`order:${id}`);
+        await redis.del('orders:all');
+        if (order.userId) {
+          await redis.del(`orders:user:${order.userId}`);
+        }
+      } catch (error) {
+        console.error('Redis cache invalidation error:', error);
+      }
+    }
+    
+    return order;
   }
 }
