@@ -1,48 +1,26 @@
-# E-commerce Backend - PostgreSQL Master-Replica
+# Frontend — Next.js
 
-Масштабируемый backend для e-commerce системы с асинхронной репликацией PostgreSQL.
+Фронтенд e-commerce приложения в составе проекта [test-backend](../README.md). Работает с API бэкенда (Fastify) для отображения заказов и взаимодействия с данными.
 
-## Технологический стек
+## Стек
 
-- **Backend**: Fastify + TypeScript + Prisma ORM
-- **Frontend**: Next.js 14 + React 18 + TypeScript + Zustand
-- **База данных**: PostgreSQL 15 (Master-Replica)
-- **Кэширование**: Redis
-- **Хранилище**: MinIO (S3-совместимое)
-- **Контейнеризация**: Docker & Docker Compose
+- **Next.js 16** (App Router)
+- **React 19** + TypeScript
+- **Tailwind CSS 4**
+- **TanStack React Query** — запросы к API и кэш
+- **Axios** — HTTP-клиент
+- **Zustand** — состояние приложения (при необходимости)
+- **Zod** — валидация данных
 
-## Быстрый старт
+## Требования
 
-# Клонировать репозиторий
-git clone https://github.com/Demon5611/test-backend.git
-cd test-backend
+- Node.js 18+
+- Запущенный бэкенд (порт 3001) и, при необходимости, БД и Redis — см. [корневой README](../README.md).
 
-# Запустить через Docker Compose
-docker-compose up -d
+## Установка
 
-# Настроить репликацию
-./scripts/setup-replication.sh
-
-# Запустить миграции
-cd backend
-npm run migrate
-
-## Структура проекта
-
-- `backend/` - Fastify API сервер
-- `frontend/` - Next.js приложение
-- `shared/` - Общие типы и утилиты
-- `docker/` - Конфигурации Docker
-- `scripts/` - Вспомогательные скрипты
-- `tests/` - Тесты (unit, integration, load)
-
-## Документация
-
-Подробная документация находится в папке `docs/`.
-
-## Лицензия
-
-MIT
+cd frontend
+npm install
 
 # Тест с 100 VU для проверки работоспособности
 k6 run --vus 100 --duration 1m backend/tests/load/k6/orders_test.js
