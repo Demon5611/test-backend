@@ -43,3 +43,6 @@ npm run migrate
 ## Лицензия
 
 MIT
+
+# Тест с 100 VU для проверки работоспособности
+k6 run --vus 100 --duration 1m backend/tests/load/k6/orders_test.js
