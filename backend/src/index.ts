@@ -23,7 +23,7 @@ const app = Fastify({
   keepAliveTimeout: 72000,
   bodyLimit: 1048576, // 1MB
   requestIdHeader: false,
-  requestIdLogLabel: false,
+  requestIdLogLabel: 'reqId',
   disableRequestLogging: true, // Отключить логирование запросов для производительности
 });
 

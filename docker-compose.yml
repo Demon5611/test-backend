@@ -76,6 +76,62 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgbouncer
+    ports:
+      - "6432:6432"
+    environment:
+      DATABASES_HOST: postgres-master
+      DATABASES_USER: postgres
+      DATABASES_PASSWORD: password
+      DATABASES_NAME: orders
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "6432", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: test-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:password@pgbouncer:6432/orders_master
+      DATABASE_REPLICA_URL: postgresql://postgres:password@pgbouncer:6432/orders_replica
+      REDIS_URL: redis://redis:6379
+    networks:
+      - pgnet
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 4
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "3000:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - pgnet
 
 volumes:
   master-data:
