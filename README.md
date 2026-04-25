@@ -1,47 +1,18 @@
-# Frontend — Next.js
+# test-backend — быстрый запуск
 
-Фронтенд e-commerce приложения в составе проекта [test-backend](../README.md). Работает с API бэкенда (Fastify) для отображения заказов и взаимодействия с данными.
+## 1) Поднять стек
 
-## Стек
-
-- **Next.js 16** (App Router)
-- **React 19** + TypeScript
-- **Tailwind CSS 4**
-- **TanStack React Query** — запросы к API и кэш
-- **Axios** — HTTP-клиент
-- **Zustand** — состояние приложения (при необходимости)
-- **Zod** — валидация данных
-
-## Требования
-
-- Node.js 18+
-
-## Установка
-
-cd frontend
-npm install
-
-Запустить реплику и проверить контейнеры
-
-cd /home/sedov.dmitriy19/Desktop/Обучение/Backend/test-backend
-docker-compose up -d redis
-docker-compose ps
-
-cd backend && npm run dev
-
-
-Один инстанс: до ~100–150 VU / ~700–900 RPS — p95 \< 300ms.
-При 2000 VU: ~1150 RPS, p95 ≈ 1.5s, http_req_failed ≈ 0%.
-
-# Тест с 100 VU для проверки работоспособности
-k6 run --vus 100 --duration 1m backend/tests/load/k6/orders_test.js
+```bash
+cd /Users/dmitrijsedov/Desktop/test-backend
+docker compose up -d --build
+docker compose ps
 
 --------------------------------------------
 
 # Тест с 10000 VU для проверки работоспособности
 
 Запуск стека (шаг 2):
-cd /home/sedov.dmitriy19/Desktop/Обучение/Backend/test-backenddocker-compose up -d --builddocker-compose ps
+cd /Backend/test-backenddocker-compose up -d --builddocker-compose ps
 Подождите, пока все контейнеры станут Up (backend может стартовать 20–30 с). Проверка через Nginx (порт 3000):
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/orderscurl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/health
 Нагрузочный тест — в k6 укажите порт 3000 (Nginx):

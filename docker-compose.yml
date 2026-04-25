@@ -41,7 +41,8 @@ services:
       - replica-data:/var/lib/postgresql/data
       - ./docker/postgres/replica/postgresql.conf:/etc/postgresql/postgresql.conf
       - ./docker/postgres/replica/pg_hba.conf:/etc/postgresql/pg_hba.conf
-      - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+      - ./scripts/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/replica-entrypoint.sh"]
     command:
       - "postgres"
       - "-c"
@@ -76,6 +77,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   pgbouncer:
     image: edoburu/pgbouncer:latest
     container_name: pgbouncer
@@ -99,6 +101,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - pgnet
 
   backend:
     build:
