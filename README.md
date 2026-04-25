@@ -23,14 +23,12 @@ API_URL=http://localhost:3000 k6 run backend/tests/load/k6/orders_test.js
 ----------------------------------
 
 Нагрузочный тест — в k6 укажите порт 3000 (Nginx):
-API_URL=http://localhost:3000 k6 run --vus 100 --duration 1m backend/tests/load/k6/orders_test.js
-Для полного сценария до 2000 VU:
-API_URL=http://localhost:3000 k6 run backend/tests/load/k6/orders_test.js
+cd /Users/dmitrijsedov/Desktop/test-backend
 
-6. Миграции и сиды при первом запуске
-(при поднятых postgres-master/replica и созданной БД):
-cd backend && npm run migrate:deploy && npm run seed
-После этого поднимать полный стек с pgbouncer/backend/nginx.
+docker run --rm -i \
+  -e API_URL=http://host.docker.internal:3000 \
+  -v "$PWD:/work" -w /work \
+  grafana/k6 run --vus 100 --duration 1m backend/tests/load/k6/orders_test.js
 
 
 ==========================================

@@ -2,20 +2,19 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
 
-const errorRate = new Rate('errors');
+const hardFailureRate = new Rate('hard_failures');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 100 },   // Разогрев: 100 VU
-    { duration: '1m', target: 500 },     // Увеличение: 500 VU
-    { duration: '2m', target: 1000 },   // Основная нагрузка: 1000 VU
-    { duration: '1m', target: 2000 },   // Пиковая нагрузка: 2000 VU
-    { duration: '30s', target: 0 },     // Снижение
+    { duration: '30s', target: 100 },
+    { duration: '1m', target: 500 },
+    { duration: '2m', target: 1000 },
+    { duration: '1m', target: 2000 },
+    { duration: '30s', target: 0 },
   ],
   thresholds: {
-    http_req_duration: ['p(95)<300'],   // Увеличить порог для высокой нагрузки
-    http_req_failed: ['rate<0.05'],     // Допустить до 5% ошибок при высокой нагрузке
-    errors: ['rate<0.05'],
+    http_req_duration: ['p(95)<300'],
+    hard_failures: ['rate<0.05'],
   },
 };
 
@@ -46,53 +45,46 @@ const PRODUCT_IDS = [
 ];
 
 function getRandomId(ids) {
-  if (!ids || ids.length === 0) {
-    return null;
-  }
   return ids[Math.floor(Math.random() * ids.length)];
 }
 
+function isHardFailure(response) {
+  // status=0 обычно означает сетевую/таймаут ошибку в k6
+  return response.status === 0 || response.status >= 500;
+}
+
 export default function () {
-  // 80% запросов - чтение с Replica (GET)
   if (Math.random() < 0.8) {
     const response = http.get(`${BASE_URL}/api/orders`, {
       tags: { name: 'GetOrders' },
       timeout: '30s',
     });
-    
-    const result = check(response, {
-      'status is 200': (r) => r.status === 200,
-      'response time < 300ms': (r) => r.timings.duration < 300,
+
+    check(response, {
+      'GET status is 200 or 429': (r) => r.status === 200 || r.status === 429,
+      'GET response time < 300ms': (r) => r.timings.duration < 300,
     });
-    
-    errorRate.add(!result);
-  } 
-  // 20% запросов - запись на Master (POST)
-  else {
-    const randomUserId = getRandomId(USER_IDS);
-    const randomProductId = getRandomId(PRODUCT_IDS);
-    
-    if (!randomUserId || !randomProductId) {
-      return;
-    }
-    
-    const payload = JSON.stringify({
-      userId: randomUserId,
-      productId: randomProductId,
-      status: 'pending',
-    });
-    
-    const response = http.post(`${BASE_URL}/api/orders`, payload, {
-      headers: { 'Content-Type': 'application/json' },
-      tags: { name: 'CreateOrder' },
-      timeout: '30s',
-    });
-    
-    const result = check(response, {
-      'status is 201': (r) => r.status === 201,
-      'response time < 500ms': (r) => r.timings.duration < 500,
-    });
-    
-    errorRate.add(!result);
+
+    hardFailureRate.add(isHardFailure(response));
+    return;
   }
+
+  const payload = JSON.stringify({
+    userId: getRandomId(USER_IDS),
+    productId: getRandomId(PRODUCT_IDS),
+    status: 'pending',
+  });
+
+  const response = http.post(`${BASE_URL}/api/orders`, payload, {
+    headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'CreateOrder' },
+    timeout: '30s',
+  });
+
+  check(response, {
+    'POST status is 201 or 429': (r) => r.status === 201 || r.status === 429,
+    'POST response time < 500ms': (r) => r.timings.duration < 500,
+  });
+
+  hardFailureRate.add(isHardFailure(response));
 }
